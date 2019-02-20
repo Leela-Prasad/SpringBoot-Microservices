@@ -1,0 +1,8 @@
+/.metadata/
+/.recommenders/
+.sonarlint
+.mvn
+mvn*
+Servers
+mvnw
+RemoteSystemsTempFiles
