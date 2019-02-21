@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.client.ServiceInstance;
+import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +25,9 @@ public class VehicleController
 	@Autowired
 	private VehicleRepository data;
 
+	@Autowired
+	private DiscoveryClient discoveryService;
+	
 	@RequestMapping(value="/newVehicle.html",method=RequestMethod.POST)
 	public String newVehicle(Vehicle vehicle)
 	{
@@ -57,9 +62,20 @@ public class VehicleController
 		Vehicle vehicle = data.findByName(name);
 		
 		// get the current position for this vehicle from the microservice
-		// TODO - lots to do here to get rid of this horrid hardcoding!!!
 		RestTemplate rest = new RestTemplate();
-		Position response = rest.getForObject("http://localhost:8090/vehicles/" + name, Position.class);
+		List<ServiceInstance> serviceInstances = discoveryService.getInstances("FLEETMAN-POSITION-TRACKER");
+		if(serviceInstances.size() == 0) {
+			// This means fleetman-position-tracker is crashed and we have to handle via
+			//circuit breaker.
+			throw new RuntimeException("Fleetman Position Tracker is Crashed!!!");
+		}
+		
+		//TODO - this we need to load balance via Feign
+		ServiceInstance serviceInstance = serviceInstances.get(0);
+		String physicalLocation = serviceInstance.getUri().toString();
+		System.out.println("PHYSICAL LOCATION :::: " + physicalLocation);
+		
+		Position response = rest.getForObject(physicalLocation + "/vehicles/" + name, Position.class);
 		
 		Map<String,Object> model = new HashMap<>();
 		model.put("vehicle", vehicle);
