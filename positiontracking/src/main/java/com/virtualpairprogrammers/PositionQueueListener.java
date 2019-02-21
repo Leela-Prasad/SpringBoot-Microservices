@@ -16,6 +16,6 @@ public class PositionQueueListener {
 	@JmsListener(destination="positionQueue	")
 	public void process(Map<String,String> message) {
 		data.updatePosition(message);
-		System.out.println("consuming message ..." + message);
+		//System.out.println("consuming message ..." + message);
 	}
 }

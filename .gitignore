@@ -22,3 +22,8 @@ positiontracking/.project
 positiontracking/.settings
 positiontracking/target
 positiontracking/bin
+fleetman-registry/.classpath
+fleetman-registry/.project
+fleetman-registry/.settings
+fleetman-registry/target
+fleetman-registry/bin
