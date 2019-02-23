@@ -15,6 +15,7 @@
 	
 	<p>It was at lat long ${model.position.lat}, ${model.position.longitude}</p>
 
+	<p>Request is served by instance with port ${model.port}</p>
     <div id="map"></div>
     <script>
       function initMap() {
