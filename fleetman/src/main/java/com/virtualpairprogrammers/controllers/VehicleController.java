@@ -18,6 +18,7 @@ import org.springframework.web.servlet.ModelAndView;
 
 import com.virtualpairprogrammers.data.VehicleRepository;
 import com.virtualpairprogrammers.domain.Vehicle;
+import com.virtualpairprogrammers.services.PositionTrackingExternalService;
 
 @Controller
 @RequestMapping("/website/vehicles")
@@ -27,7 +28,7 @@ public class VehicleController
 	private VehicleRepository data;
 
 	@Autowired
-	private LoadBalancerClient loadBalancer;
+	private PositionTrackingExternalService trackingService;
 	
 	@RequestMapping(value="/newVehicle.html",method=RequestMethod.POST)
 	public String newVehicle(Vehicle vehicle)
@@ -63,24 +64,11 @@ public class VehicleController
 		Vehicle vehicle = data.findByName(name);
 		
 		// get the current position for this vehicle from the microservice
-		RestTemplate rest = new RestTemplate();
-		
-		ServiceInstance serviceInstance = loadBalancer.choose("FLEETMAN-POSITION-TRACKER");
-		
-		if(serviceInstance== null) {
-			throw new RuntimeException("Fleetman Position Tracker is Crashed!!!");
-		}
-		
-		String physicalLocation = serviceInstance.getUri().toString();
-		Integer port = serviceInstance.getPort();
-		System.out.println("PHYSICAL LOCATION :::: " + physicalLocation);
-		
-		Position response = rest.getForObject(physicalLocation + "/vehicles/" + name, Position.class);
+		Position latestPosition = trackingService.getLastestPositionForVehicleFromRemoteMicroservice(name);
 		
 		Map<String,Object> model = new HashMap<>();
 		model.put("vehicle", vehicle);
-		model.put("position", response);
-		model.put("port", port);
+		model.put("position", latestPosition);
 		return new ModelAndView("vehicleInfo", "model",model);
 	}
 	
