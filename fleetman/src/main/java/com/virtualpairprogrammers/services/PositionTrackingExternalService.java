@@ -7,7 +7,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.loadbalancer.LoadBalancerClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import com.netflix.hystrix.contrib.javanica.annotation.HystrixCommand;
@@ -17,7 +16,6 @@ import com.virtualpairprogrammers.data.VehicleRepository;
 import com.virtualpairprogrammers.domain.Vehicle;
 
 @Service
-@Transactional
 public class PositionTrackingExternalService {
 
 	@Autowired
@@ -49,14 +47,8 @@ public class PositionTrackingExternalService {
 		Position response = rest.getForObject(physicalLocation + "/vehicles/" + name, Position.class);
 		System.out.println("SUCCESS!!!");
 		
-		//This Vehicle object is dirty, when transaction is committed which will happen 
-		//at the end of the method JPA will automatically run Update SQL to reflect this changes in 
-		//database.
-		Vehicle vehicle = repository.findByName(name);
-		vehicle.setLat(response.getLat());
-		vehicle.setLongitude(response.getLongitude());
-		vehicle.setLastRecordedPosition(response.getTimestamp());
-		
+		response.setUpToDate(true);
+
 		return response;
 	}
 	
@@ -71,6 +63,7 @@ public class PositionTrackingExternalService {
 		position.setLat(vehicle.getLat());
 		position.setLongitude(vehicle.getLongitude());
 		position.setTimestamp(vehicle.getLastRecordedPosition());
+		position.setUpToDate(false);
 		return position;
 	}
 }

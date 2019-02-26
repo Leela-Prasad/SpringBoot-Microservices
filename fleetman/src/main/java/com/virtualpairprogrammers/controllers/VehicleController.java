@@ -9,6 +9,7 @@ import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.cloud.client.loadbalancer.LoadBalancerClient;
 import org.springframework.stereotype.Controller;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -21,6 +22,7 @@ import com.virtualpairprogrammers.domain.Vehicle;
 import com.virtualpairprogrammers.services.PositionTrackingExternalService;
 
 @Controller
+@Transactional
 @RequestMapping("/website/vehicles")
 public class VehicleController 
 {
@@ -29,6 +31,9 @@ public class VehicleController
 
 	@Autowired
 	private PositionTrackingExternalService trackingService;
+	
+	@Autowired
+	private VehicleRepository repository;
 	
 	@RequestMapping(value="/newVehicle.html",method=RequestMethod.POST)
 	public String newVehicle(Vehicle vehicle)
@@ -65,6 +70,13 @@ public class VehicleController
 		
 		// get the current position for this vehicle from the microservice
 		Position latestPosition = trackingService.getLastestPositionForVehicleFromRemoteMicroservice(name);
+		
+		if(latestPosition.isUpToDate()) {
+			Vehicle vehicleobj = repository.findByName(name);
+			vehicleobj.setLat(latestPosition.getLat());
+			vehicleobj.setLongitude(latestPosition.getLongitude());
+			vehicleobj.setLastRecordedPosition(latestPosition.getTimestamp());
+		}
 		
 		Map<String,Object> model = new HashMap<>();
 		model.put("vehicle", vehicle);

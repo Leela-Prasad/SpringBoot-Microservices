@@ -10,6 +10,7 @@ public class Position {
 	private BigDecimal lat;
 	private BigDecimal longitude;
 	private Date timestamp;
+	private boolean isUpToDate;
 	
 	public BigDecimal getLat() {
 		return lat;
@@ -28,6 +29,12 @@ public class Position {
 	}
 	public void setTimestamp(Date timestamp) {
 		this.timestamp = timestamp;
+	}
+	public boolean isUpToDate() {
+		return isUpToDate;
+	}
+	public void setUpToDate(boolean isUpToDate) {
+		this.isUpToDate = isUpToDate;
 	}
 
 	
