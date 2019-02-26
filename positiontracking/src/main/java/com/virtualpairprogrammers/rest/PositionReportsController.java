@@ -21,6 +21,11 @@ public class PositionReportsController
 	@RequestMapping(method=RequestMethod.GET,value="/vehicles/{vehicleName}")
 	public ResponseEntity<Position> getLatestReportForVehicle(@PathVariable String vehicleName)
 	{
+		try {
+			Thread.sleep(1001);
+		} catch (InterruptedException e1) {
+		}
+		
 		try 
 		{
 			Position position = data.getLatestPositionFor(vehicleName);
