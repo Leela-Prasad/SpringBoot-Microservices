@@ -27,3 +27,8 @@ fleetman-registry/.project
 fleetman-registry/.settings
 fleetman-registry/target
 fleetman-registry/bin
+fleetman-global-config/.classpath
+fleetman-global-config/.project
+fleetman-global-config/.settings
+fleetman-global-config/target
+fleetman-global-config/bin
