@@ -22,16 +22,16 @@ public class PositionReportsController
 	public ResponseEntity<Position> getLatestReportForVehicle(@PathVariable String vehicleName)
 	{
 
-		try {
+		/*try {
 			Thread.sleep(500);
 		}catch(Exception e) {}
 		
 		if(Math.random() < 0.75) {
 			System.out.println("Give UP!");
 			throw new RuntimeException("Problems! Give up");
-		}
+		}*/
 			
-			
+		System.out.println("Request Executed");	
 		try 
 		{
 			Position position = data.getLatestPositionFor(vehicleName);

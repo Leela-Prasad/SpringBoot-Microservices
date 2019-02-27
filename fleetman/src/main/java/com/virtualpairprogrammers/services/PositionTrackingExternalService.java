@@ -14,18 +14,21 @@ import com.virtualpairprogrammers.domain.Vehicle;
 @Service
 public class PositionTrackingExternalService {
 
-	@Autowired
-	private LoadBalancerClient loadBalancer;
+	/*@Autowired
+	private LoadBalancerClient loadBalancer;*/
 	
 	@Autowired
 	private VehicleRepository repository;
+	
+	@Autowired
+	private RemotePositionMicroserviceCalls remoteService;
 	
 	//In fallback mechanism we will wrap the code which may throw an exception into a separate method
 	//and annotate that method with @HystrixCommand which indicates the fallback that needs to be 
 	//run in case of failures.
 	@HystrixCommand(fallbackMethod="handleExternalServiceDown")
 	public Position getLastestPositionForVehicleFromRemoteMicroservice(String name) {
-		RestTemplate rest = new RestTemplate();
+		/*RestTemplate rest = new RestTemplate();
 		
 		System.out.println("Calling Eureka");
 		ServiceInstance serviceInstance = loadBalancer.choose("FLEETMAN-POSITION-TRACKER");
@@ -37,9 +40,11 @@ public class PositionTrackingExternalService {
 		
 		System.out.println("Found Instances for Position Tracker");
 		String physicalLocation = serviceInstance.getUri().toString();
-		System.out.println("PHYSICAL LOCATION :::: " + physicalLocation);
+		System.out.println("PHYSICAL LOCATION :::: " + physicalLocation);*/
 		
-		Position response = rest.getForObject(physicalLocation + "/vehicles/" + name, Position.class);
+		
+		//Position response = rest.getForObject(physicalLocation + "/vehicles/" + name, Position.class);
+		Position response = remoteService.getLatestPositionForVehicle(name);
 		System.out.println("SUCCESS!!!");
 		
 		response.setUpToDate(true);
