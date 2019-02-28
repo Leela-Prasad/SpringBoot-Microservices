@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -63,7 +65,8 @@ public class PositionsimulatorApplication {
 						// broadcast this report
 						try
 						{
-							template.convertAndSend("positionQueue",positionMessage);
+							JourneySimulator simulator = (JourneySimulator)ctx.getBean("journeySimulator");
+							template.convertAndSend(simulator.getQueueName(),positionMessage);
 							messageNotSent = false;
 						}
 						catch (UncategorizedJmsException e)

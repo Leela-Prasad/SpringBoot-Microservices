@@ -13,7 +13,7 @@ public class PositionQueueListener {
 	private Data data;
 	
 	
-	@JmsListener(destination="positionQueue	")
+	@JmsListener(destination="${fleetman.position.queue}")
 	public void process(Map<String,String> message) {
 		data.updatePosition(message);
 		//System.out.println("consuming message ..." + message);
