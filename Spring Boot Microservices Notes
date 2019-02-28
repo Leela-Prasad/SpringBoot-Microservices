@@ -1,0 +1,290 @@
+A Microservice should deal only one specific area of business functionality.
+
+Each Microservice should be 
+1. Highly Cohesive - cohesive means a microservice should have a single set of responsibility.
+2. Loosely Coupled - we can have achieve loose coupling by using messaging or ESB.
+
+Your Integration Databases also should be specific to business functionality.
+In Monolith we have a single Big Integration Database where multiple modules/teams will execute read/write operations, this is clear violation of Cohesive and Coupling Principles.
+
+
+jmsTemplate.receiveAndConvert("sampleQueue")
+In JMS Queue if we don’t have a message then above line will wait for indefinite time until message is available. we can tweak this via configuration.
+
+Below line will set Receive wait time 1sec
+jmsTemplate.setReceiveTimeout(1000);
+
+** If there is no message then the return value will be null.
+
+What happens when a listener receives message from the queue but the method processing the message crashes then ActiveMQ Broker will do redelivery and default max redelivery attempts is 6. with a delay of 1 sec. 
+
+** Non-Persistent Message will not have Redelivery Mechanism.
+
+We can tune Redelivery attempts and redelivery delay time
+
+Default Redelivery Policies Attributes:
+
+Property	Value	Description
+backOffMultiplier	5	The back-off multiplier.
+
+collisionAvoidanceFactor	0.15	The percentage of range of collision avoidance if enabled.
+
+initialRedeliveryDelay	1000L	The initial redelivery delay in milliseconds.
+
+maximumRedeliveries	6	Sets the maximum number of times a message will be redelivered before it is considered a poisoned pill and returned to the broker so it can go to a Dead Letter Queue.
+Set to -1 for unlimited redeliveries.
+
+maximumRedeliveryDelay	-1	Sets the maximum delivery delay that will be applied if the useExponentialBackOff option is set. (use value -1 to define that no maximum be applied) (v5.5).
+
+redeliveryDelay	1000L	The delivery delay if initialRedeliveryDelay=0 (v5.4).
+
+useCollisionAvoidance	false	Should the redelivery policy use collision avoidance.
+
+useExponentialBackOff	false	Should exponential back-off be used, i.e., to exponentially increase the timeout.
+
+
+
+spring.activemq.broker-url=tcp://localhost:61616?jms.redeliveryPolicy.useExponentialBackOff=true&jms.redeliveryPolicy.maximumRedeliveries=3
+
+above line will have messages to be Redelivered 3 times with a exponential time off and this multiplier is defined by below property.
+backOffMultiplier	5
+
+so 1st message initialRedeliveryDelay(1s)
+2nd message 1s * 5 = 5s
+3rd message 5s * 5 = 25s
+4th message 25s * 5 = 125s
+
+
+Service Discovery:
+one micro service can interact with other micro service if it knows ip address(generally load balancer ip address) and we can put this ip address in a property file so that we can refer, but in a system we can have 100 of micro services running and putting all the ip address in a property file is difficult and these ip address are likely to change if application is hosted in cloud, so applications need to change the values in the property files which is a nightmare.
+
+To solve this problem we will use Service Discovery(Eureka), a system which will have map maintained with (microservice-name, ip-address:port)
+
+
+Clients/Microservices needs to register with Service Discovery with a unique name so that other micro services can lookup registry with that name.
+
+Eureka checks health of micro services via heart beats, if doesn’t get heart beats for 3 times then eureka will mark deregisters from its register, so other micro services cannot communicate with that micro service.
+
+Since it is using heart beats Eureka server will not have immediate consistency(or changes) and it will have Eventual consistency.
+
+** Eureka also register with another Eureka servers that are running in multiple AZ, to sync the registration details, so that in case of disasters we will have other Eureka server that is having data.
+This Eureka Server should be highly Available as all micro services depends on this.
+
+In our development we have one Eureka server so we have turn off this registration using below property.
+eureka.client.register-with-eureka=false
+eureka.client.fetch-registry=false
+
+When Eureka server is not having enough load then it will show RED warning means updates to the registry will be done at longer periods.
+
+EMERGENCY! EUREKA MAY BE INCORRECTLY CLAIMING INSTANCES ARE UP WHEN THEY'RE NOT. RENEWALS ARE LESSER THAN THRESHOLD AND HENCE THE INSTANCES ARE NOT BEING EXPIRED JUST TO BE SAFE.
+
+
+** To do a Microservice Lookup that micro service need not be registered with Eureka.
+
+
+Here this property 
+server.port = 0
+0 means a random unused port.
+
+
+Ribbon:
+When we want to scale particular micro service then we can spin up another instance and this instance numbers can be scaled to any number, but the problem is how the calling application(web app) knows which instance it has to send the request we can use a hardware load balancer infront of micro service but we have 100 of micro services and load balancer for every micro service is not fessible instead want we can do is we can do load balancing  from client application itself, so that it avoids load balancer at every micro service.
+
+Netflix provided a software load balancer that can be used at client application called Ribbon.
+
+** When we spin up a micro service it will also register with Eureka with same instance name to avoid this we have append the micro service name with a random GUID.
+
+*** If you don’t provide a unique name that will be registered with Eureka then eureka will not register
+** suppose if we spin up 4 instances of a micro service with the same name then eureka will only register 1 and the requests will go to remaining 3 instances but eureka is not able to resolve that instance and hence exception is thrown.
+To avoid this we have attach a random number as below
+eureka.instance.instanceId=${spring.application.name}:${random.value}
+
+
+Naive Approach for doing load balancing:
+
+RestTemplate rest = new RestTemplate();
+List<ServiceInstance> serviceInstances = discoveryService.getInstances("FLEETMAN-POSITION-TRACKER");
+if(serviceInstances.size() == 0) {
+	throw new RuntimeException("Fleetman Position Tracker is Crashed!!!");
+}
+ServiceInstance serviceInstance = serviceInstances.get(0);
+Here we have to write logic to determine the index number.
+
+
+Best Approach(using Ribbon)
+@Autowired
+private LoadBalancerClient loadBalancer;
+
+ServiceInstance serviceInstance = loadBalancer.choose("FLEETMAN-POSITION-TRACKER");
+String physicalLocation = serviceInstance.getUri().toString();
+
+
+
+Problems when instance is down:
+If an instance is down then eureka will not know this status immediately so eureka will route requests to this unhealthy instance, then we will get connection refused exception. 
+Eureka system provides eventual consistency but not immediate consistency.
+To avoid this we have to use circuit breaker.
+
+
+Hystrix:
+If one micro service fails due to failure then we can prevent exception cascading to calling micro services using fallback mechanism.
+
+Hystrix will provide below features.
+1. If the service you are calling fails(exception) then a fallback method is executed.
+2. If a situation is in dire then  a circuit breaker kicks into prevent any further network calls.(dire situation means it should be not cross the hystrix default properties i.e., a dire condition will occur when in a 20 consecutive requests if 50% requests(i.e.,10 requests) failed in 10 seconds time window then it is a dire condition)
+
+if an instance is down and eureka doesn’t know this information then it will route request to unhealthy node this we can eliminate by using fallback mechanism.
+
+In fallback mechanism we will wrap the code which may throw an exception into a separate method and annotate that method with @HystrixCommand(fallbackMethod="handleExternalServiceDown") which indicates the fallback that needs to be run in case of failures.
+
+Fallback Method signature should be same as that of method where exception is originating.
+
+We have to annotate the main application with @EnableHystrix so that application will scan for @Hystrix commands at startup.
+
+
+
+If a Microservice is calling another Microservice with Hystrix enabled for fallback and circuit breaking features then the target micro service should respond in 1000 ms otherwise it will get timeout and considered as failure, so hystrix fall back method will run.
+Below is the property which defaults timeout to 1000ms
+# The following may need to be changed. If this is exceeded, we run fallback
+# (and it is considered a fail for the above rules)
+hystrix.command.default.execution.isolation.thread.timeoutInMilliseconds=1000
+
+
+we can modify this property according to our requirements.
+
+Why we need Circuit Breaker?
+some times a micro service will not respond to incoming requests due to load on that micro service, or network issues or database connection pool is frozen or can be any other reason 
+or some times a micro service is failing due to some technical reason this might be due to deployment of that micro service. in this case there is no use to process these requests
+
+In the first case if the due to load/network issue entire system will be freezed and clients can click refresh button multiple times so that micro services will receive n * requests which may lead to system crash.
+To avoid this Netflix has given a circuit breaker feature.
+according to the defaults
+In 20 consecutive requests if 50% requests(i.e., 10 requests) fails in 10 seconds window then immediately it will open the Circuit Breaker means during this circuit breaker open state it will directly run the fallback method instead of original method.
+This Circuit Breaker will automatically gets closed after 5 seconds to see if micro service is recovered and this process continues.
+So Circuit Breaker may prevent System Crash if the issue is temporary which is more common in a micro service based systems.
+
+Below are the default properties for the Circuit Breaker which are good for production environments.
+
+# Generally the settings don't need to change! Remember, on failure
+# THE FALLOVER WILL ALWAYS RUN IN THE EVENT OF FAILURE - the breaker 
+# doesn't need to be open. 
+
+# This is how many requests needs to be made to the method before the circuit
+# breaker will even consider tripping. Default = 20 in the rolling time window 
+# No of consecutive Requests
+hystrix.command.default.circuitBreaker.requestVolumeThreshold=20
+
+# Once the breaker does consider tripping, it decides if the number of failures
+# in the rolling time window exceeds this percentage. Default 50%. (ie 0% means a single
+# error will be considered a "trip" - but the above needs to be met as well).
+# Percentage of Failed Requests.
+hystrix.command.default.circuitBreaker.errorThresholdPercentage=50
+
+# This is the aforementioned rolling time window. A long one will make 
+# hystrix "more sensitive".  Default = 10000 (10secs)
+# time window for percentage of Failed Requests 
+hystrix.command.default.metrics.rollingStats.timeInMilliseconds=10000
+
+# Despite all of the above, after the following period, the breaker will close
+# Of course, it can be tripped again. Default = 5000 (5 seconds)
+# Circuit Breaker Sleep Time
+hystrix.command.default.circuitBreaker.sleepWindowInMilliseconds=5000
+
+
+# The following may need to be changed. If this is exceeded, we run fallback
+# (and it is considered a fail for the above rules)
+# MicroService Response time
+hystrix.command.default.execution.isolation.thread.timeoutInMilliseconds=1000
+
+
+
+**** In a Hystrix annotated method JPA update/delete operations will not work because Hystrix will run that method in a Transaction Not Supported Propogation mode.
+
+By Default method annotated with hystrix will start a new thread and this new thread is not considered as transactional by spring, so JPA updates/deletes will not reflect.
+To avoid this we can make the strategy to semaphore instead of thread.
+this strategy default value is thread.
+Recommendation from hystrix documentation is to use thread which will provide an extra layer of protection against latencies
+
+In Approach2 we can remove that database update from Hystrix primary method and it make sense that we should only have the network call in hystrix method.
+so this will avoid to use JPA in hystrix primary method.
+
+
+*** Generally External Network calls should be wrapped in a hystrix method so that we can provide fallback for that particular situation.
+
+
+Feign:
+Feign provide below features.
+1. Provides Load balancing (which is done by ribbon) automatically out of the box.
+   this is because when feign sees ribbon dependency on the class path it will automatically provide load balancing for the micro services which are running multiple instances.
+
+2. It will make the rest calls more cleaner means we no need bother about the hostname and port feign will automatically do out of the box.
+
+To enable we need to annotate starting class with
+@EnableFeignClients
+
+
+
+//Below code snippet is automatically provided by feign i.e., load balancing.
+ServiceInstance serviceInstance = loadBalancer.choose("FLEETMAN-POSITION-TRACKER");
+		
+if(serviceInstance== null) {
+	System.out.println("No instances of Position Tracker");
+	throw new RuntimeException("Fleetman Position Tracker is Crashed!!!");
+}
+
+
+
+** Generally Hystrix command will swallow the exception and run the fallback, so we are not sure what is happening behind the scenes.
+To debug what we can do is to comment out @HystrixCommand so that it will become a normal method so that fallback will not execute
+
+
+Spring Cloud Config:
+In General we have some properties that may change in future and used by many micro services, so if there is any change in these properties then we need to go to every micro service and change the property and restart the micro service. This is error prone not reliable.
+To solve this problem we have to refactor all these properties used by multiple micro services, and we use a central place either a file system or a version control system like GIT to store these global properties.
+Spring Cloud Config project provides solution to this problem.
+
+
+To Start a spring cloud config server you need to annotate main class with 
+@EnableConfigServer
+
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-config-server</artifactId>
+</dependency>
+
+By Default Spring Cloud Config Server will look for a git repository url where our properties are defined.
+
+We can override this and point to a local file system, we have to set below property.
+spring.profiles.active=native
+
+
+By Default for these properties it will look for these files for loading the properties
+application.properties         -> default profile
+application-<env>.properties   -> env profile
+
+env can be like dev,test,pre prod,prod
+
+
+Here spring cloud config server is also a spring boot application, so if you move all the global properties to application.properties under resources folder it will not work because application.properties contains properties that are need for that spring boot application to run. 
+so we need to place these properties in a different place and point that file to let config server know that our global properties exists in this path or we need to use git repository and give the git repository path.
+
+spring.cloud.config.server.native.searchLocations:classpath:/global-config
+
+For Git:
+spring.cloud.config.server.git.uri=https://github.com/Leela-Prasad/fleetman-global-config
+
+In Client application you have to define this dependency 
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-config</artifactId>
+</dependency>
+
+so that it will automatically query config server at 
+localhost:8888
+You can modify this by using below property
+spring.cloud.config.uri=http://localhost:8888
+
+
+
+
+****  If we are using GIT and we make any changes to that repository those changes will be reflected to config server immediately, BUT micro services will not take this change as these properties are loaded at the startup so we have to restart impacted micro services to take this changes this is a pain point and it is solved by Spring Cloud BUS.
